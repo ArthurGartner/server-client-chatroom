@@ -1,5 +1,5 @@
 //Arthur Gartner & Jigyasa Suryawanshi
-//CSCI 632 Project 2
+//CSCI 632 Project 3
 //Server.c
 
 #include <stdio.h>
@@ -13,12 +13,17 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <stdbool.h>
 
-#define SERVER_PORT 6328
+#define SERVER_PORT 6340
 #define MAX_LINE 256
 #define MAX_PENDING 5
+#define MAX_CHATROOMS 5
+#define MAX_PER_CHATROOM 5
 #define MAXNAME 256
 #define TABLE_SIZE 10
+#define CHATROOM_REFRESH_TIME 2
+#define PACKET_BUFFER_SIZE 5
 
 //Error method to catch errors and close program
 void error(const char *msg)
@@ -26,7 +31,7 @@ void error(const char *msg)
 	printf("%s", msg);
 	printf("Shutting down.");
 	exit(1);
-}
+};
 
 //Packet structure for all sent and received data
 struct packet
@@ -35,21 +40,112 @@ struct packet
 	char uName[MAXNAME];
 	char mName[MAXNAME];
 	char data[MAXNAME];
-	short seqNumber;
+	int chatID;
 };
 
 //Registration table for server to hold info on connected clients
 struct registrationTable
 {
+	bool occupied;
 	int port;
 	int sockid;
 	char mName[MAXNAME];
 	char uName[MAXNAME];
+	int chatID;
 };
 
+struct clientThread
+{
+	bool available;
+	pthread_t thread;
+};
+
+//Thread lock for registration table entries
 pthread_mutex_t my_mutex = PTHREAD_MUTEX_INITIALIZER;
-int indexCount;
-struct registrationTable table[10];
+
+//Thread lock packet buffer array
+pthread_mutex_t buffer_deload = PTHREAD_MUTEX_INITIALIZER;
+
+//Registration table size depends on number of chatrooms allowed and number of users per chatroom allowed.
+struct registrationTable table[MAX_CHATROOMS * MAX_PER_CHATROOM];
+
+//Variable to maintain number of users within a chatroom
+int currentUsers[MAX_CHATROOMS];
+
+//Variable to maintain the data packet buffers for each chatroom
+struct packet packetBuffer[MAX_CHATROOMS * PACKET_BUFFER_SIZE];
+
+//Thread array to manage recieving messages from multiple clients
+struct clientThread clients[MAX_PER_CHATROOM * MAX_CHATROOMS];
+
+//Function that handles receipt of data packet from clients and assigns to appropriate chatid packet buffer
+void *messageDelegate(void *socket)
+{
+	//Initate loca variables
+	struct packet packet_chat_rcv, packet_chat_snd;
+	int sockID = *((int *) socket);
+	
+	//Begin loop
+	while (1)
+	{
+		//Wipe memory for packet_chat_rcv memory location
+		bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
+		
+		//Loop for packet receiving from client
+		if (recv(sockID, &packet_chat_rcv, sizeof(packet_chat_rcv), 0) > -1)
+		{
+			printf("Data packet with type %d received from Client: %s User: %s.\n", ntohs(packet_chat_rcv.type), packet_chat_rcv.mName, packet_chat_rcv.uName);
+			
+			//Setup data to show username
+			char str[256];
+			strcpy(str, "[");
+			strcat(str, packet_chat_rcv.uName);
+			strcat(str, "]: ");
+			strcat(str, packet_chat_rcv.data); 	
+			strcpy(packet_chat_rcv.data, str);
+			
+			//Lock buffer deload so other threads do not access this buffer while packets are being added
+			pthread_mutex_lock(&buffer_deload);
+			
+			printf("Adding data packet to chatroom %d packet buffer...\n", ntohs(packet_chat_rcv.chatID));
+			
+			//Add to packet buffer at next available index
+			int startIndex = ntohs(packet_chat_rcv.chatID) * PACKET_BUFFER_SIZE;
+			for (int i = startIndex; i < startIndex + PACKET_BUFFER_SIZE; i++)
+			{
+				printf("%d\n", packetBuffer[i].type);
+				//Check if empty and if empty then add to buffer
+				if (!ntohs(packetBuffer[i].type) > 0)
+				{
+					packetBuffer[i] = packet_chat_rcv;
+					printf("Packet succesfully added to chatroom %d packet buffer at index %d!\n", ntohs(packet_chat_rcv.chatID), i);
+					break;
+				}
+			}
+			
+			//Unlock packet buffer so deload can occur by multicaster
+			pthread_mutex_unlock(&buffer_deload);
+			
+			packet_chat_snd.type = htons(231);
+			
+			printf("Sending confirmation of receipt to client...\n");
+			
+			//Send packet back to client		 
+			send(sockID, &packet_chat_snd, sizeof(packet_chat_snd), 0);
+			
+			printf("Receipt confirmation sent.\n");
+			
+			//Wipe memory for packet_chat_rcv location
+			bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
+			
+			//Wipe memory for packet_chat_snd location
+			bzero(&packet_chat_snd, sizeof(packet_chat_snd));
+		}
+		
+		//Close socket
+		//close(newsockfd);
+	}
+}
 
 //Function for handling all join requests for potential connected clients. Executes within seperate thread then terminates thread.
 void *join_handler(void *recievedClientData)
@@ -92,84 +188,119 @@ void *join_handler(void *recievedClientData)
 	printf("Acknowledgement packet sent.\n");
 	
 	printf("Adding client to registration table...\n");
-	
+
 	//Set lock to ensure other threads do not access table
 	pthread_mutex_lock(&my_mutex);
-	
 	//Add approved client to registration table so that multicaster can pull client info (socket id) to send broadcast to
-	table[indexCount].port = ((struct registrationTable*)clientData)->port;
-	table[indexCount].sockid = newsock;
-	strcpy(clientData->uName, table[indexCount].uName);
-	strcpy(clientData->mName, table[indexCount].mName);	
+
+	int startIndex = ntohs(packet_reg.chatID) * MAX_PER_CHATROOM;
+	for (int i = startIndex; i < (startIndex + MAX_PER_CHATROOM); i++)
+	{
+		if (!table[i].occupied)
+		{
+			table[i].port = ((struct registrationTable*)clientData)->port;
+			table[i].sockid = newsock;
+			strcpy(clientData->uName, table[i].uName);
+			strcpy(clientData->mName, table[i].mName);	
+			table[i].chatID = ntohs(packet_reg.chatID);
+			
+			//Increment chatroom user count
+			currentUsers[ntohs(packet_reg.chatID)]++;
+			
+			int *socketID = malloc(sizeof(socketID));
+			*socketID = newsock;
+			
+			//Setup thread to receive messages from this client
+			for (int j = 0; j < (MAX_PER_CHATROOM * MAX_CHATROOMS); j++)
+			{
+				if (clients[j].available)
+				{
+					pthread_create(&clients[j].thread, NULL, messageDelegate, socketID);
+					clients[j].available = false;
+					printf("Client messageDelegate thread added at index %d.\n", j);
+					break;
+				}
+			}
+			
+			printf("Client succesfully added to registration table at index %d.\n", i);
+			break;
+		}
+	}
 	
 	//Unlock to allow other threads access to table
 	pthread_mutex_unlock(&my_mutex);
 	
-	//Increment index counter to keep track of available indexes in the registration table
-	indexCount++;
-	
-	printf("Client added to table. Join handler thread terminating.\n");
+	printf("Join handler thread terminating...\n");
 	
 	//Exit the thread for the join handler. A new joinhandler thread will be created by main when a new client connects.
 	pthread_exit(NULL);
 }
 
-//Multicaster function that operates continuously in seperate thread
-void *multicaster()
+//Multicaster function that operates continuously in seperate thread (Each chatroom is represented as a multicast)
+void *multicaster(void *chatroomID)
 {
 	//Local variable declarations
-	char *filename;
-	char text[100];
-	int fd, nread;
-	short seqNum = 0;
+	int roomID = *((int *) chatroomID);
+	int bufferStartIndex = roomID * PACKET_BUFFER_SIZE;
+	int regStartIndex = roomID * MAX_PER_CHATROOM;
+	char servername[MAXNAME];
+	gethostname(servername, MAXNAME);
+	char serveruser[MAXNAME];
+	strcpy(serveruser, "SERVER");
 	struct packet packet_chat_snd;
 	
-	//Setup text file location. Text file generated with lorem ipsum text
-	filename = "input.txt";
-	
-	//Open the file for reading
-	fd = open(filename, O_RDONLY, 0);
+	printf("Chatroom %d created.\n", roomID);
 	
 	//This loop runs continuously
 	while (1)
 	{
-		//Clear packet_chat_snd memory
-		bzero(&packet_chat_snd, sizeof(packet_chat_snd));
-		
-		//Activate lock which ensures other threads do not access the registration table until unlocked
-		pthread_mutex_lock(&my_mutex);
-		
-		//Only executes when atleast 1 client has been added to the registration table
-		if (indexCount > 0)
+		//Only execute if the chatroom is NOT empty
+		if (currentUsers[roomID] > 0)
 		{
-			//Read 100bytes of data from the text file and store in text variable
-			nread = read(fd, text, 100);
+			printf("USER FOUND IN CHATROOM %d\n", roomID);
+			//Lock packet buffer array during deload
+			pthread_mutex_lock(&buffer_deload);
 			
-			//Set packet type
-			packet_chat_snd.type = htons(231);
-			
-			//Set sqeNum which is incremented each time a broadcast is made
-			packet_chat_snd.seqNumber = seqNum;
-			
-			//Copy the text to the data portion of the packet to be sent
-			strcpy(packet_chat_snd.data, text);
-			
-			//Increase sequence number since 100bytes have been read from the file
-			seqNum++;
-			
-			//Iterate through clients within the registration table and send the data packet using the socketfd for each client found in the registration table
-			for (int i = 0; i < TABLE_SIZE; i++)
+			for (int i = bufferStartIndex; i < (bufferStartIndex + PACKET_BUFFER_SIZE); i++)
 			{
-				//Send data using sockfd value found in table for each client entry
-				send(table[i].sockid, &packet_chat_snd, sizeof(packet_chat_snd), 0);
+				printf("BUFFERINDEX %d\n", i);
+				printf("PACKET TYPE %d\n", ntohs(packetBuffer[i].type));
+				//Check if buffer index has anything
+				if (ntohs(packetBuffer[i].type) > 0)
+				{
+					//Wipe memory for packet_chat_snd memory location
+					bzero(&packet_chat_snd, sizeof(packet_chat_snd));
+				
+					//Setup send packet
+					packet_chat_snd.type = htons(231);
+					strcpy(packet_chat_snd.mName, servername);
+					strcpy(packet_chat_snd.uName, serveruser);
+					strcpy(packet_chat_snd.data, packetBuffer[i].data);
+					packet_chat_snd.chatID = packetBuffer[i].chatID;
+				
+					//Broadcast to all clients within chatroom iteratively
+					for (int j = regStartIndex; j < (regStartIndex + MAX_PER_CHATROOM); j++)
+					{
+						if (table[j].sockid > 0)
+						{
+						printf("User found at index %d", j);
+							send(table[j].sockid, &packet_chat_snd, sizeof(packet_chat_snd), 0);
+						}
+					}
+				
+					//Zero out packet buffer index since packet has been distributed to clients
+					bzero(&packetBuffer[i], sizeof(packetBuffer[i]));
+					
+					packetBuffer[i].type = htons(0);
+				}
 			}
+			
+			//Unlock packet buffer to allow additional packets to buffer
+			pthread_mutex_unlock(&buffer_deload);
 		}
 		
-		//Unlock allowing other threads to access the registration table
-		pthread_mutex_unlock(&my_mutex);
-		
-		//Pause this thread for 5 seconds otherwise this function would essentially print the entire text document at once. 
-		sleep(5);
+		//Pauses multicaster broadcast for set time in seconds
+		sleep(CHATROOM_REFRESH_TIME);
 	}
 }
 
@@ -183,8 +314,21 @@ int main (int argc, char* argv[])
 	struct sockaddr_in serv_addr, cli_addr;
 	struct registrationTable client_info;
 	struct packet packet_reg;
-	pthread_t threads[2];
-	indexCount = 0;
+	pthread_t threads[1];
+	pthread_t chatrooms[MAX_CHATROOMS];
+	
+	//Set initial client list availablity to all true
+	for (int i = 0; i < (MAX_PER_CHATROOM * MAX_CHATROOMS); i++)
+	{
+		clients[i].available = true;
+	}
+	
+	//Set initial packet buffer to all NULL
+	for (int i = 0; i < (MAX_CHATROOMS * PACKET_BUFFER_SIZE); i++)
+	{
+		packetBuffer[i].type = 0;
+	}
+	
 	
 	printf("Creating socket...\n");
 	
@@ -226,10 +370,17 @@ int main (int argc, char* argv[])
 	//Get memory length of cli_addr structure
 	clilen = sizeof(cli_addr);
 	
-	indexCount = 0;
-	
-	//Assigns the multicaster function to a thread. The multicaster function will run continuously in this new thread
-	pthread_create(&threads[1], NULL, multicaster, NULL);
+	//Initiates multicasters which act as chatrooms. Each multicaster function will run continuously in this new thread.
+
+	for (int i = 0; i < MAX_CHATROOMS; i++)
+		{
+			//Send data using sockfd value found in table for each client entry
+			int *chatroomID = malloc(sizeof(chatroomID));
+			*chatroomID = i + 1;
+			
+			//Create chatroom thread
+			pthread_create(&chatrooms[i], NULL, multicaster, chatroomID);
+		}
 	
 	//Loop that runs continuously. Allows for multiple clients to join 
 	while(1)

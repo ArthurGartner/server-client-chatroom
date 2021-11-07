@@ -1,5 +1,5 @@
 //Arthur Gartner & Jigyasa Suryawanshi
-//CSCI 632 Project 2
+//CSCI 632 Project 3
 //Client.c
 
 #include <stdio.h>
@@ -10,8 +10,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 
-#define SERVER_PORT 6328
+#define SERVER_PORT 6340
 #define MAX_LINE 256
 #define MAXNAME 256
 
@@ -30,8 +31,33 @@ struct packet
 	char uName[MAXNAME];
 	char mName[MAXNAME];
 	char data[MAXNAME];
-	short seqNumber;
+	int chatID;
 };
+
+
+//Thread to recieve messages
+void *receiveMessage(void *socket)
+{
+	int sockID = *((int *) socket);
+	struct packet packet_chat_rcv;
+	
+	
+	//Wipe memory of packer_char_rcv memory locations
+	bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
+	
+	while (1)
+	{
+		printf("RUNNING");
+		if (recv(sockID, &packet_chat_rcv, sizeof(packet_chat_rcv), 0) > -1)
+		{
+			//Print data from received packet
+			printf("%s", packet_chat_rcv.data);
+			
+			//Wipe memory of packer_char_rcv memory locations
+			bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
+		}
+	}
+}
 
 //Main function
 int main (int argc, char* argv[])
@@ -40,11 +66,12 @@ int main (int argc, char* argv[])
 	struct hostent *server;
 	struct sockaddr_in serv_addr;
 	struct packet packet_reg, packet_conf, packet_chat_rcv, packet_chat_snd;
+	pthread_t readMessage;
 	char buffer[MAX_LINE];
 	int sockfd, len;
 	
 	//Argument check
-	if (argc < 3)
+	if (argc < 4)
 	{
 		error("Argument missing.\n");
 	}
@@ -82,6 +109,7 @@ int main (int argc, char* argv[])
 	//Setup client info
 	packet_reg.type = htons(121);
 	strcpy(packet_reg.uName, argv[2]);
+	packet_reg.chatID = htons(atoi(argv[3]));
 	char clientname[MAXNAME];
 	gethostname(clientname, MAXNAME);
 	strcpy(packet_reg.mName, clientname);
@@ -116,21 +144,33 @@ int main (int argc, char* argv[])
 		error("Confirmation packet not received.\n");
 	}
 	
-	printf("Acknowledgement received from server. Tuning in...\n");
+	printf("Acknowledgement received from server. Joining chatroom %d\n", atoi(argv[3]));
+	
+	int *socketID = malloc(sizeof(sockfd));
+	*socketID = sockfd;
+	
+	pthread_create(&readMessage, NULL, receiveMessage, socketID);
 	
 	//Send & receive loop
 	while (1)
 	{
-		//Wipe memory of packer_char_rcv memory locations
-		bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
-	
+		//Clear packet_chat_snd memory location
+		bzero(&packet_chat_snd, sizeof(packet_chat_snd));
+		
+		packet_chat_snd.type = htons(131);
+		strcpy(packet_chat_snd.mName, clientname);
+		strcpy(packet_chat_snd.uName, argv[2]);
+		packet_chat_snd.chatID = htons(atoi(argv[3]));
+		
+		//Add user input to data
+		fgets(packet_chat_snd.data, MAXNAME, stdin);
+		
+		//Send packet
+		send(sockfd, &packet_chat_snd, sizeof(packet_chat_snd), 0);
+		
 		//Receive packet
 		recv(sockfd, &packet_chat_rcv, sizeof(packet_chat_rcv), 0);
-		
-		//Print received packet info
-		printf("Packet with type %d received from server. Data received:\n", ntohs(packet_chat_rcv.type));
 	
-		//Print data from received packet
-		printf("Sequence(%d): %s\n",packet_chat_rcv.seqNumber, packet_chat_rcv.data);
+		printf("Confirmation packet received!");
 	}
 }
