@@ -19,8 +19,8 @@
 //Error method to catch errors and close program
 void error(const char *msg)
 {
-	printf("%s", msg);
-	printf("Shutting down.\n");
+	printf("[CLIENT] %s\n", msg);
+	printf("[CLIENT] Shutting down.\n");
 	exit(1);
 }
 
@@ -110,7 +110,7 @@ int main (int argc, char* argv[])
 	bcopy((char *) server->h_addr, (char *) &serv_addr.sin_addr.s_addr, server->h_length);
 	serv_addr.sin_port = htons(SERVER_PORT);
 	
-	printf("Attempting connection to server %s:%d...\n", argv[1], ntohs(serv_addr.sin_port));
+	printf("[CLIENT] Attempting connection to server %s:%d...\n", argv[1], ntohs(serv_addr.sin_port));
 	
 	//Attempt connection to server
 	if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
@@ -118,7 +118,7 @@ int main (int argc, char* argv[])
 		error("Connection Failed.\n");
 	}
 	
-	printf("Connection successful.");
+	printf("[CLIENT] Connection to server %s:%d successful.\n", argv[1], ntohs(serv_addr.sin_port));
 	
 	//Setup client info
 	packet_reg.type = htons(121);
@@ -127,17 +127,17 @@ int main (int argc, char* argv[])
 	char clientname[MAXNAME];
 	gethostname(clientname, MAXNAME);
 	strcpy(packet_reg.mName, clientname);
-	printf("Sending 1st registration packet with type %d...\n", ntohs(packet_reg.type));
+	printf("[CLIENT] Sending 1st registration packet with type %d...\n", ntohs(packet_reg.type));
 	
 	//Send registration packet
 	send(sockfd, &packet_reg, sizeof(packet_reg), 0);
 	
-	printf("Registration packet (1/3) sent.\n");
+	printf("[CLIENT] Registration packet (1/3) sent.\n");
 	
 	//Send registration packet
 	send(sockfd, &packet_reg, sizeof(packet_reg), 0);
 	
-	printf("Registration packet (2/3) sent.\n");
+	printf("[CLIENT] Registration packet (2/3) sent.\n");
 	
 	//Send registration packet
 	send(sockfd, &packet_reg, sizeof(packet_reg), 0);
@@ -148,20 +148,19 @@ int main (int argc, char* argv[])
 	//Receive confirmation packet
 	recv(sockfd, &packet_conf, sizeof(packet_conf), 0);
 	
-	printf("Packet received from server with type %d.\n", ntohs(packet_conf.type));
+	printf("[CLIENT] Packet received from server with type %d.\n", ntohs(packet_conf.type));
 	
 	
 	//Ensure packet type is correct
 	if (ntohs(packet_conf.type) != 221)
 	{
-		printf("%d", packet_conf.type);
 		error("Confirmation packet not received.\n");
 	}
 	
 	if (recv(sockfd, &packet_chat_rcv, sizeof(packet_chat_rcv), 0) > -1)
 	{
 		//Print data from received packet
-		printf("%s\n", packet_chat_rcv.data);
+		printf("[CHATROOM%d][NOTIFICATION] %s\n", ntohs(packet_chat_rcv.chatID), packet_chat_rcv.data);
 			
 		//Wipe memory of packet_chat_rcv memory locations
 		bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));

@@ -255,7 +255,7 @@ void *join_handler(void *recievedClientData)
 	}
 	
 	bzero(&statusBuffer, sizeof(statusBuffer));
-	sprintf(statusBuffer, "Registration packet (3/3) recieved from client(%s:%d | %s) user(%s).", clientData->ip, clientData->port, clientData->mName, clientData->uName);
+	sprintf(statusBuffer, "Registration packet (3/3) received from client(%s:%d | %s) user(%s).", clientData->ip, clientData->port, clientData->mName, clientData->uName);
 	joinStatus(statusBuffer);
 	
 	//Assign type to confirmation packet
@@ -347,6 +347,7 @@ void *join_handler(void *recievedClientData)
 				
 					//Setup welcome packet contents
 					packet_chat_snd.type = htons(231);
+					packet_chat_snd.chatID = packet_reg.chatID;
 					char welcomeStr[MAXNAME];
 					if (currentUsers[ntohs(packet_reg.chatID)] == 2)
 					{
