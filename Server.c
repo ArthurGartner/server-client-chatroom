@@ -15,7 +15,8 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#define SERVER_PORT 6340
+//Constants for server program
+#define SERVER_PORT 6341
 #define MAX_LINE 256
 #define MAX_PENDING 5
 #define MAX_CHATROOMS 5
@@ -33,7 +34,8 @@ void error(const char *msg)
 {
 	printf("[SERVER-MAIN] ERROR: %s\n", msg);
 };
-//Function to deal with fata errors
+
+//Function to deal with fata/ errors which result in full program termination.
 void fatalError(const char *msg)
 {
 	printf("[SERVER-MAIN] FATAL ERROR: %s\n", msg);
@@ -47,6 +49,7 @@ void systemStatus(const char *msg)
 	printf("[SERVER-MAIN] %s\n", msg);
 };
 
+//Function to display messages for the joinStatus thread
 void joinStatus(const char *msg)
 {
 	printf("[SERVER-JOINHANDLER] %s\n", msg);
@@ -75,6 +78,7 @@ struct registrationTable
 	int chatID;
 };
 
+//Structure for client threads with bool variable stating thread availability
 struct clientThread
 {
 	bool available;
@@ -90,19 +94,19 @@ pthread_mutex_t buffer_deload = PTHREAD_MUTEX_INITIALIZER;
 //Thread lock new user array
 pthread_mutex_t new_user = PTHREAD_MUTEX_INITIALIZER;
 
-//Thread lock for clien disconnect
+//Thread lock for client disconnect
 pthread_mutex_t client_disconnect = PTHREAD_MUTEX_INITIALIZER;
 
 //Registration table size depends on number of chatrooms allowed and number of users per chatroom allowed.
 struct registrationTable table[MAX_CHATROOMS * MAX_PER_CHATROOM];
 
-//Variable to maintain number of users within a chatroom
+//Variable to maintain count of users within a chatroom
 int currentUsers[MAX_CHATROOMS];
 
-//Array to hold entries for new users that join chatroom
+//Array to hold entries for new users that join chatroom, acts as queue and allows for chatroom announcement of user
 int newUser[MAX_CHATROOMS * MAX_PER_CHATROOM];
 
-//Array for client disconnectd, handles the queue
+//Array for client disconnects, acts as queue
 int disconnect[MAX_CHATROOMS * MAX_PER_CHATROOM];
 
 //Variable to maintain the data packet buffers for each chatroom
@@ -111,7 +115,7 @@ struct packet packetBuffer[MAX_CHATROOMS * PACKET_BUFFER_SIZE];
 //Thread array to manage recieving messages from multiple clients
 struct clientThread clients[MAX_PER_CHATROOM * MAX_CHATROOMS];
 
-//Function that handles receipt of data packet from clients and assigns to appropriate chatid packet buffer
+//Function that handles receipt of data packet from clients and assigns to appropriate chatid packet buffer. Each connected client is assigned an individual messageDelegate thread.
 void *messageDelegate(void *regIndexPassed)
 {
 	//Initate local variables
@@ -132,6 +136,7 @@ void *messageDelegate(void *regIndexPassed)
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Data packet with type %d received.\n",packet_chat_rcv.mName, packet_chat_rcv.uName, ntohs(packet_chat_rcv.type));
 			
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Locking packet buffer table...\n",packet_chat_rcv.mName, packet_chat_rcv.uName);
+			
 			//Lock buffer deload so other threads do not access this buffer while packets are being added
 			pthread_mutex_lock(&buffer_deload);
 			
@@ -139,7 +144,7 @@ void *messageDelegate(void *regIndexPassed)
 			
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Adding packet to chatroom %d packet buffer table...\n",packet_chat_rcv.mName, packet_chat_rcv.uName, ntohs(packet_chat_rcv.chatID));
 			
-			//Add to packet buffer at next available index
+			//Add to chatroom data packet buffer at next available index. Packet not added if buffer is full
 			int startIndex = ntohs(packet_chat_rcv.chatID) * PACKET_BUFFER_SIZE;
 			for (int i = startIndex; i < startIndex + PACKET_BUFFER_SIZE; i++)
 			{
@@ -153,19 +158,11 @@ void *messageDelegate(void *regIndexPassed)
 			}
 			
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Unlocking packet buffer table...\n",packet_chat_rcv.mName, packet_chat_rcv.uName);
+			
 			//Unlock packet buffer so deload can occur by multicaster
 			pthread_mutex_unlock(&buffer_deload);
 			
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Packet buffer table unlocked.\n",packet_chat_rcv.mName, packet_chat_rcv.uName);
-			
-			//packet_chat_snd.type = htons(231);
-			
-			//printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Sending confirmation packet to client...\n",packet_chat_rcv.mName, packet_chat_rcv.uName);
-			
-			//Send packet back to client		 
-			//send(sockID, &packet_chat_snd, sizeof(packet_chat_snd), 0);
-			
-			//printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Confirmation packet sent to client.\n",packet_chat_rcv.mName, packet_chat_rcv.uName);
 			
 			//Wipe memory for packet_chat_rcv location
 			bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
@@ -176,16 +173,21 @@ void *messageDelegate(void *regIndexPassed)
 		//Handle client disconnect
 		else if (value == 0)
 		{
-			//Queue for disconnect by multicaster
+			//Queue for disconnect by multicaster.
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Socket disconnected.\n",table[regIndex].mName, table[regIndex].uName);
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Queuing for client information deletion...\n",table[regIndex].mName, table[regIndex].uName);
-			//Add client reg index to disconnect array
+			
+			//Add client reg index to disconnect array at available index.
 			int startIndexNew = table[regIndex].chatID * MAX_PER_CHATROOM;
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Locking disconnect table...\n",table[regIndex].mName, table[regIndex].uName);
+			
 			//Lock new user array during write
 			pthread_mutex_lock(&client_disconnect);
+			
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Disconnect table locked.\n",table[regIndex].mName, table[regIndex].uName);
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Searching for available disconnect queue index...\n",table[regIndex].mName, table[regIndex].uName);
+			
+			//Add client registration index to disconnect queue at next available index
 			for (int k = startIndexNew; k < (startIndexNew + MAX_PER_CHATROOM); k++)
 			{
 				if (disconnect[k] < 0)
@@ -198,13 +200,18 @@ void *messageDelegate(void *regIndexPassed)
 			
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Unlocking disconnect table...\n",table[regIndex].mName, table[regIndex].uName);
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Disconnect table unlocked.\n",table[regIndex].mName, table[regIndex].uName);
+			
 			//Unlock disconnect array
 			pthread_mutex_unlock(&client_disconnect);
 			
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Closing socket...\n",table[regIndex].mName, table[regIndex].uName);
+			
+			//Close the socket since the client has disconnected.
 			close(sockID);
+			
 			printf("[SERVER-MESSAGEDELEGATE(%s | %s)] Socket closed. Thread terminating...\n",table[regIndex].mName, table[regIndex].uName);
 			
+			//Terminate thread since associated client is no longer connected.
 			pthread_exit(NULL);
 		}
 	}
@@ -214,10 +221,12 @@ void *messageDelegate(void *regIndexPassed)
 void *join_handler(void *recievedClientData)
 {
 	joinStatus("Join handler initiated.");
+	
 	//Local variables
 	int newsock;
 	struct packet packet_reg, packet_conf, packet_chat_snd;
 	struct registrationTable *clientData = (struct registrationTable*) recievedClientData;
+	
 	//Get the socket file descriptor which allows for continued data transfer between client and server even though the thread has changed and the newsockfd variable in main will
 	//be overwritten with any new connections.
 	newsock = clientData->sockid;
@@ -258,6 +267,33 @@ void *join_handler(void *recievedClientData)
 	sprintf(statusBuffer, "Registration packet (3/3) received from client(%s:%d | %s) user(%s).", clientData->ip, clientData->port, clientData->mName, clientData->uName);
 	joinStatus(statusBuffer);
 	
+	//Check if chatroom is full an if so then send disconnect request to client and do not proceed with registration of connecting client
+	if (currentUsers[ntohs(packet_reg.chatID)] >= MAX_PER_CHATROOM)
+	{
+		bzero(&statusBuffer, sizeof(statusBuffer));
+		sprintf(statusBuffer, "Client(%s:%d | %s) user(%s) request to join chatroom%d denied. Chatroom%d is full.", clientData->ip, clientData->port, clientData->mName, clientData->uName, currentUsers[ntohs(packet_reg.chatID)], currentUsers[ntohs(packet_reg.chatID)]);
+		joinStatus(statusBuffer);
+		
+		bzero(&statusBuffer, sizeof(statusBuffer));
+		sprintf(statusBuffer, "Sending disconnect packet to client(%s:%d | %s) user(%s)...", clientData->ip, clientData->port, clientData->mName, clientData->uName);
+		joinStatus(statusBuffer);
+		
+		//Send disconnect packet to requesting client
+		packet_conf.type = htons(501);
+		send(newsock, &packet_conf, sizeof(packet_conf), 0);
+		
+		bzero(&statusBuffer, sizeof(statusBuffer));
+		sprintf(statusBuffer, "Disconnect packet sent to client(%s:%d | %s) user(%s).", clientData->ip, clientData->port, clientData->mName, clientData->uName);
+		joinStatus(statusBuffer);
+		
+		//Terminate joinHandler thread since client will not be added to the registration table
+		joinStatus("Terminating...");
+		
+		//Exit the thread to allow main to continue loop
+		pthread_exit(NULL);
+	}
+
+		
 	//Assign type to confirmation packet
 	packet_conf.type = htons(221);
 	
@@ -282,17 +318,19 @@ void *join_handler(void *recievedClientData)
 	pthread_mutex_lock(&my_mutex);
 	
 	joinStatus("Registration table locked for write access.");
-	//Add approved client to registration table so that multicaster can pull client info (socket id) to send broadcast to
 
 	bzero(&statusBuffer, sizeof(statusBuffer));
 	sprintf(statusBuffer, "Finding empty index in registration table for client(%s:%d | %s) user(%s)...", clientData->ip, clientData->port, clientData->mName, clientData->uName);
 	joinStatus(statusBuffer);
 
+	//Add approved client to registration table so that multicaster can pull client info (socket id) to send broadcast to. Available index must be found for client within appropriate chatroom segment.
 	int startIndex = ntohs(packet_reg.chatID) * MAX_PER_CHATROOM;
 	for (int i = startIndex; i < (startIndex + MAX_PER_CHATROOM); i++)
 	{
+		//Check if index is occupied
 		if (!table[i].occupied)
 		{
+			//Index not occupied so copy over client info to table and index i
 			table[i].port = ((struct registrationTable*)clientData)->port;
 			table[i].sockid = newsock;
 			strcpy(table[i].uName, clientData->uName);
@@ -305,13 +343,14 @@ void *join_handler(void *recievedClientData)
 			sprintf(statusBuffer, "Client(%s:%d | %s) user(%s) information saved in registration table index %d.", clientData->ip, clientData->port, table[i].mName, table[i].uName, i);
 			joinStatus(statusBuffer);
 			
-			//Increment chatroom user count
+			//Increment chatroom user count since the client will join the chatroom.
 			currentUsers[ntohs(packet_reg.chatID)]++;
 			
 			bzero(&statusBuffer, sizeof(statusBuffer));
 			sprintf(statusBuffer, "Chatroom %d now has %d users.", ntohs(packet_reg.chatID), currentUsers[ntohs(packet_reg.chatID)]);
 			joinStatus(statusBuffer);
 			
+			//Setup variable to pass integer to messagedelegate thread
 			int *regIndex = malloc(sizeof(regIndex));
 			*regIndex = i;
 			
@@ -325,6 +364,7 @@ void *join_handler(void *recievedClientData)
 			//Lock new user array during write
 			pthread_mutex_lock(&new_user);
 			
+			//Find available index to add new user info
 			for (int k = startIndexNew; k < (startIndexNew + MAX_PER_CHATROOM); k++)
 			{
 				if (newUser[k] < 0)
@@ -340,6 +380,7 @@ void *join_handler(void *recievedClientData)
 			//Setup thread to receive messages from this client
 			for (int j = 0; j < (MAX_PER_CHATROOM * MAX_CHATROOMS); j++)
 			{
+				//Find available thread index for new client thread
 				if (clients[j].available)
 				{
 					//Wipe memory for packet_chat_snd memory location
@@ -349,6 +390,7 @@ void *join_handler(void *recievedClientData)
 					packet_chat_snd.type = htons(231);
 					packet_chat_snd.chatID = packet_reg.chatID;
 					char welcomeStr[MAXNAME];
+					
 					if (currentUsers[ntohs(packet_reg.chatID)] == 2)
 					{
 						sprintf(welcomeStr, "You have joined chatroom %d. There is %d other user in this chatroom.", table[i].chatID, (currentUsers[ntohs(packet_reg.chatID)] - 1));
@@ -366,7 +408,10 @@ void *join_handler(void *recievedClientData)
 					//Track index of thread to make available when client leaves
 					table[i].threadIndex = j;
 				
+					//Create new thread for new client
 					pthread_create(&clients[j].thread, NULL, messageDelegate, regIndex);
+					
+					//Set thread index availability to false so it is not overwritten
 					clients[j].available = false;
 					
 					bzero(&statusBuffer, sizeof(statusBuffer));
@@ -384,6 +429,7 @@ void *join_handler(void *recievedClientData)
 	}
 	
 	joinStatus("Unlocking registration table.");
+	
 	//Unlock to allow other threads access to table
 	pthread_mutex_unlock(&my_mutex);
 	
@@ -415,8 +461,10 @@ void *multicaster(void *chatroomID)
 			//Check client deletion queue for disconnected clients
 			int startIndexNew = roomID * MAX_PER_CHATROOM;
 			
+			//Lock for client_disconncet
 			pthread_mutex_lock(&client_disconnect);
 			
+			//Search for disconnect requests
 			for (int m = startIndexNew; m < (startIndexNew + MAX_PER_CHATROOM); m++)
 			{
 				if (disconnect[m] > -1)
@@ -434,7 +482,8 @@ void *multicaster(void *chatroomID)
 					printf("[SERVER-CHATROOM%d] Disconnect notification packed created.\n", roomID);
 					
 					printf("[SERVER-CHATROOM%d] Sending disconnect notification packet to connected clients...\n", roomID);
-					//Broadcast to all clients within chatroom iteratively
+					
+					//Broadcast to all clients within chatroom iteratively. Allows client to see when user leaves chatroom.
 					for (int v = regStartIndex; v < (regStartIndex + MAX_PER_CHATROOM); v++)
 					{
 						if (table[v].sockid > 0)
@@ -447,6 +496,7 @@ void *multicaster(void *chatroomID)
 					
 					printf("[SERVER-CHATROOM%d] Making client thread index available at index %d...\n", roomID, table[disconnect[m]].threadIndex);
 					
+					//Make thread index available for reassignment later
 					clients[table[disconnect[m]].threadIndex].available = true;
 					
 					printf("[SERVER-CHATROOM%d] Removing client(%s:%d | %s) user(%s) registration found at index %d in registration table...\n", roomID, table[disconnect[m]].ip, table[disconnect[m]].port, table[disconnect[m]].mName, table[disconnect[m]].uName, disconnect[m]);
@@ -455,12 +505,15 @@ void *multicaster(void *chatroomID)
 					
 					printf("[SERVER-CHATROOM%d] Registration table cleared at registration table index %d...\n", roomID, disconnect[m]);
 					
+					//Reset disconnect index so it may be reassigned for later client disconnected
 					disconnect[m] = -1;
 					
+					//Decrement user count in chatroom since client has left
 					currentUsers[roomID]--;
 				}
 			}
 			
+			//Unlock for client disconnect
 			pthread_mutex_unlock(&client_disconnect);
 		
 			//Check for new users and announce	
@@ -483,7 +536,8 @@ void *multicaster(void *chatroomID)
 					printf("[SERVER-CHATROOM%d] Join notification packed created.\n", roomID);
 					
 					printf("[SERVER-CHATROOM%d] Sending join notification packet to connected clients...\n", roomID);
-					//Broadcast to all clients within chatroom iteratively
+					
+					//Broadcast to all clients within chatroom iteratively. This allows all users in chatroom to be informed of new users.
 					for (int j = regStartIndex; j < (regStartIndex + MAX_PER_CHATROOM); j++)
 					{
 						if (table[j].sockid > 0)
@@ -494,6 +548,7 @@ void *multicaster(void *chatroomID)
 					
 					printf("[SERVER-CHATROOM%d] Join notification packet sent.\n", roomID);
 				
+					//Reset index to allow for future writes
 					newUser[k] = -1;
 				}
 			}
@@ -505,12 +560,14 @@ void *multicaster(void *chatroomID)
 			//Lock packet buffer array during deload
 			pthread_mutex_lock(&buffer_deload);
 			
+			//Iterate through packet buffer to see if any data packets have been recieved since last refresh.
 			for (int i = bufferStartIndex; i < (bufferStartIndex + PACKET_BUFFER_SIZE); i++)
 			{
 				//Check if buffer index has anything
 				if (ntohs(packetBuffer[i].type) > 0)
 				{
 					printf("[SERVER-CHATROOM%d] Buffered packet found at index %d.\n", roomID, i);
+					
 					//Wipe memory for packet_chat_snd memory location
 					bzero(&packet_chat_snd, sizeof(packet_chat_snd));
 				
@@ -531,7 +588,7 @@ void *multicaster(void *chatroomID)
 					}
 				
 
-					//Broadcast to all clients within chatroom iteratively
+					//Broadcast to all clients within chatroom iteratively. This sends the data message to all clients.
 					for (int j = regStartIndex; j < (regStartIndex + MAX_PER_CHATROOM); j++)
 					{
 						if (table[j].sockid > 0)
@@ -542,9 +599,10 @@ void *multicaster(void *chatroomID)
 					
 					printf("[SERVER-CHATROOM%d] Buffered packet sent.\n", roomID);
 				
-					//Zero out packet buffer index since packet has been distributed to clients
+					//Zero out packet buffer index since packet has been distributed to clients.
 					bzero(&packetBuffer[i], sizeof(packetBuffer[i]));
 					
+					//Reset packet at index i so it can be written to later.
 					packetBuffer[i].type = htons(0);
 				}
 			}
@@ -616,6 +674,7 @@ int main (int argc, char* argv[])
 	strcpy(serveruser, "SERVER");
 	
 	systemStatus("Server network properties set.");
+	
 	bzero(&statusBuffer, sizeof(statusBuffer));
 	sprintf(statusBuffer, "Server address: %s:%d.", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
 	systemStatus(statusBuffer);
@@ -636,13 +695,12 @@ int main (int argc, char* argv[])
 	//Get memory length of cli_addr structure
 	clilen = sizeof(cli_addr);
 	
-	//Initiates multicasters which act as chatrooms. Each multicaster function will run continuously in this new thread.
-	
 	bzero(&statusBuffer, sizeof(statusBuffer));
 	sprintf(statusBuffer, "Initializing chatroom threads with refresh rates of %d seconds...", CHATROOM_REFRESH_TIME);
 
 	systemStatus(statusBuffer);	
 	
+	//Initiates multicasters which act as chatrooms. Each multicaster function will run continuously in this new thread.
 	for (int i = 0; i < MAX_CHATROOMS; i++)
 		{
 			//Send data using sockfd value found in table for each client entry
@@ -674,6 +732,7 @@ int main (int argc, char* argv[])
 		//Check for acceptance and assign to new socket
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 		
+		//Make sure sockfd is valid
 		if (newsockfd < 0)
 		{
 			fatalError("Error on socket accept!");
@@ -719,7 +778,7 @@ int main (int argc, char* argv[])
 		sprintf(statusBuffer, "Caching client(%s:%d | %s) user(%s) information...", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port),packet_reg.mName, packet_reg.uName);
 		systemStatus(statusBuffer);
 	
-		//Save client info
+		//Cache client info
 		client_info.port = ntohs(cli_addr.sin_port);
 		strcpy(client_info.ip, inet_ntoa(cli_addr.sin_addr));
 		client_info.sockid = newsockfd;

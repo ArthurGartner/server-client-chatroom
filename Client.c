@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#define SERVER_PORT 6340
+#define SERVER_PORT 6341
 #define MAX_LINE 256
 #define MAXNAME 256
 
@@ -45,6 +45,7 @@ void *receiveMessage(void *socket)
 	//Wipe memory of packer_char_rcv memory locations
 	bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
 	
+	//Loop that runs to continuously receive message
 	while (1)
 	{
 		if (recv(sockID, &packet_chat_rcv, sizeof(packet_chat_rcv), 0) > -1)
@@ -142,8 +143,8 @@ int main (int argc, char* argv[])
 	//Send registration packet
 	send(sockfd, &packet_reg, sizeof(packet_reg), 0);
 	
-	printf("Registration packet (3/3) sent.\n");
-	printf("Awaiting response from server...\n");
+	printf("[CLIENT] Registration packet (3/3) sent.\n");
+	printf("[CLIENT] Awaiting response from server...\n");
 	
 	//Receive confirmation packet
 	recv(sockfd, &packet_conf, sizeof(packet_conf), 0);
@@ -151,12 +152,19 @@ int main (int argc, char* argv[])
 	printf("[CLIENT] Packet received from server with type %d.\n", ntohs(packet_conf.type));
 	
 	
-	//Ensure packet type is correct
-	if (ntohs(packet_conf.type) != 221)
+	//Handler for full chatroom response from server.
+	if (ntohs(packet_conf.type) == 501)
 	{
-		error("Confirmation packet not received.\n");
+		printf("[CHATROOM%d] Chatroom is full!\n", atoi(argv[3]));
+		error("Connected chatroom was full.");
+
+	}
+	else if (ntohs(packet_conf.type) != 221)
+	{
+		error("Confirmation packet not received.\n");	
 	}
 	
+	//Wait for notification packet from connected chatroom
 	if (recv(sockfd, &packet_chat_rcv, sizeof(packet_chat_rcv), 0) > -1)
 	{
 		//Print data from received packet
@@ -169,6 +177,7 @@ int main (int argc, char* argv[])
 	int *socketID = malloc(sizeof(sockfd));
 	*socketID = sockfd;
 	
+	//Create a thread to be constantly listening for data packets sent from the connected server
 	pthread_create(&readMessage, NULL, receiveMessage, socketID);
 	
 	//Send & receive loop
@@ -177,6 +186,7 @@ int main (int argc, char* argv[])
 		//Clear packet_chat_snd memory location
 		bzero(&packet_chat_snd, sizeof(packet_chat_snd));
 		
+		//Setup data packet
 		packet_chat_snd.type = htons(131);
 		strcpy(packet_chat_snd.mName, clientname);
 		strcpy(packet_chat_snd.uName, argv[2]);
