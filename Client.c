@@ -47,15 +47,29 @@ void *receiveMessage(void *socket)
 	
 	while (1)
 	{
-		printf("RUNNING");
 		if (recv(sockID, &packet_chat_rcv, sizeof(packet_chat_rcv), 0) > -1)
 		{
-			//Print data from received packet
-			printf("%s", packet_chat_rcv.data);
+			if (ntohs(packet_chat_rcv.type) == 444)
+			{
+				//Print data from received packet
+				printf("[CHATROOM%d][%s]: %s has joined the chatroom.\n", ntohs(packet_chat_rcv.chatID), packet_chat_rcv.uName, packet_chat_rcv.data);
+			}
+			else if (ntohs(packet_chat_rcv.type) == 445)
+			{
+				//Print data from received packet
+				printf("[CHATROOM%d][%s]: %s has left the chatroom.\n", ntohs(packet_chat_rcv.chatID), packet_chat_rcv.uName, packet_chat_rcv.data);
+			}
+			else
+			{
+				//Print data from received packet
+				printf("[CHATROOM%d][%s]: %s", ntohs(packet_chat_rcv.chatID), packet_chat_rcv.uName, packet_chat_rcv.data);
+			}
 			
-			//Wipe memory of packer_char_rcv memory locations
+			//Wipe memory of packet_chat_rcv memory locations
 			bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
 		}
+		
+		sleep(1);
 	}
 }
 
@@ -144,7 +158,14 @@ int main (int argc, char* argv[])
 		error("Confirmation packet not received.\n");
 	}
 	
-	printf("Acknowledgement received from server. Joining chatroom %d\n", atoi(argv[3]));
+	if (recv(sockfd, &packet_chat_rcv, sizeof(packet_chat_rcv), 0) > -1)
+	{
+		//Print data from received packet
+		printf("%s\n", packet_chat_rcv.data);
+			
+		//Wipe memory of packet_chat_rcv memory locations
+		bzero(&packet_chat_rcv, sizeof(packet_chat_rcv));
+	}
 	
 	int *socketID = malloc(sizeof(sockfd));
 	*socketID = sockfd;
@@ -167,10 +188,5 @@ int main (int argc, char* argv[])
 		
 		//Send packet
 		send(sockfd, &packet_chat_snd, sizeof(packet_chat_snd), 0);
-		
-		//Receive packet
-		recv(sockfd, &packet_chat_rcv, sizeof(packet_chat_rcv), 0);
-	
-		printf("Confirmation packet received!");
 	}
 }
