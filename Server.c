@@ -17,12 +17,10 @@
 
 //Constants for server program
 #define SERVER_PORT 6341
-#define MAX_LINE 256
 #define MAX_PENDING 5
 #define MAX_CHATROOMS 5
 #define MAX_PER_CHATROOM 5
 #define MAXNAME 256
-#define TABLE_SIZE 10
 #define CHATROOM_REFRESH_TIME 2
 #define PACKET_BUFFER_SIZE 5
 
