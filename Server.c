@@ -265,7 +265,33 @@ void *join_handler(void *recievedClientData)
 	sprintf(statusBuffer, "Registration packet (3/3) received from client(%s:%d | %s) user(%s).", clientData->ip, clientData->port, clientData->mName, clientData->uName);
 	joinStatus(statusBuffer);
 	
-	//Check if chatroom is full an if so then send disconnect request to client and do not proceed with registration of connecting client
+	//Check if ChatID id not correct if so then send disconnect request to client and do not proceed with registration of connecting client
+	if (ntohs(packet_reg.chatID) < 0 || ntohs(packet_reg.chatID) >= MAX_CHATROOMS)
+	{
+		bzero(&statusBuffer, sizeof(statusBuffer));
+		sprintf(statusBuffer, "Client(%s:%d | %s) user(%s) request to join chatroom%d denied. Chatroom%d does not exist.", clientData->ip, clientData->port, clientData->mName, clientData->uName, currentUsers[ntohs(packet_reg.chatID)], currentUsers[ntohs(packet_reg.chatID)]);
+		joinStatus(statusBuffer);
+		
+		bzero(&statusBuffer, sizeof(statusBuffer));
+		sprintf(statusBuffer, "Sending disconnect packet to client(%s:%d | %s) user(%s)...", clientData->ip, clientData->port, clientData->mName, clientData->uName);
+		joinStatus(statusBuffer);
+		
+		//Send disconnect packet to requesting client
+		packet_conf.type = htons(502);
+		send(newsock, &packet_conf, sizeof(packet_conf), 0);
+		
+		bzero(&statusBuffer, sizeof(statusBuffer));
+		sprintf(statusBuffer, "Disconnect packet sent to client(%s:%d | %s) user(%s).", clientData->ip, clientData->port, clientData->mName, clientData->uName);
+		joinStatus(statusBuffer);
+		
+		//Terminate joinHandler thread since client will not be added to the registration table
+		joinStatus("Terminating...");
+		
+		//Exit the thread to allow main to continue loop
+		pthread_exit(NULL);
+	}
+	
+	//Check if chatroom is full and if so then send disconnect request to client and do not proceed with registration of connecting client
 	if (currentUsers[ntohs(packet_reg.chatID)] >= MAX_PER_CHATROOM)
 	{
 		bzero(&statusBuffer, sizeof(statusBuffer));
@@ -290,8 +316,9 @@ void *join_handler(void *recievedClientData)
 		//Exit the thread to allow main to continue loop
 		pthread_exit(NULL);
 	}
-
-		
+	
+	
+			
 	//Assign type to confirmation packet
 	packet_conf.type = htons(221);
 	

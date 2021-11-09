@@ -13,14 +13,13 @@
 #include <pthread.h>
 
 #define SERVER_PORT 6341
-#define MAX_LINE 256
 #define MAXNAME 256
 
 //Error method to catch errors and close program
 void error(const char *msg)
 {
 	printf("[CLIENT] %s\n", msg);
-	printf("[CLIENT] Shutting down.\n");
+	printf("[CLIENT] Shutting down...\n");
 	exit(1);
 }
 
@@ -82,7 +81,6 @@ int main (int argc, char* argv[])
 	struct sockaddr_in serv_addr;
 	struct packet packet_reg, packet_conf, packet_chat_rcv, packet_chat_snd;
 	pthread_t readMessage;
-	char buffer[MAX_LINE];
 	int sockfd, len;
 	
 	//Argument check
@@ -155,8 +153,14 @@ int main (int argc, char* argv[])
 	//Handler for full chatroom response from server.
 	if (ntohs(packet_conf.type) == 501)
 	{
-		printf("[CHATROOM%d] Chatroom is full!\n", atoi(argv[3]));
+		printf("[CHAT-SERVER] Chatroom%d is full!\n", atoi(argv[3]));
 		error("Connected chatroom was full.");
+
+	}
+	else if (ntohs(packet_conf.type) == 502)
+	{
+		printf("[CHAT-SERVER] Chatroom ID %d does not exist!\n", atoi(argv[3]));
+		error("ChatroomID does not exist!");
 
 	}
 	else if (ntohs(packet_conf.type) != 221)
