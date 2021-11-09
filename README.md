@@ -31,7 +31,10 @@ Client.c consists of only two constants that can be changed.
  <li>[IP_ADDRESS] - IP address for Server.c. Example: 127.0.0.1</li>
  <li>[USERNAME] - This is the username that will be used to identify the user within the chatroom. Example: John</li>
  <li>[CHATROOM_ID] - This is the ID of the chatroom which is an integer. Chatroom ID's start at 0 and increment by one. If 5 chatrooms are allowed in Server.c then the available chatroom IDs would be 0,1,2,3 and 4. Example: 1</li>
- </ul>
+</ul>
+<h2>How it works</h2>
+Once executed the Server.c program begins going through the main function. The main function creates a seperate thread for each chatroom and runs the multicaster function in each one of the threads. A socket is created and set to listen to connecting clients. Once a client requests connection the socket accepts the connection and waits for a registration packet (1/3) from the client. The client sends the registration packet (1/3) to the server. Upon receipt of this registration packet (1/3) the Server creates a new thread to execute the join_handler function. The client information is then sent to the join_handler function and awaits for registration packet (2/3) and registration packet (3/3) from the client which the client sends. Upon receipt of the final registration apcket (3/3) a check is done to ensure......
+ 
   
  
  
