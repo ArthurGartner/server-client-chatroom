@@ -1,1 +1,41 @@
 # CSCI632_Project3
+<h2>Summary</h2>
+This chat program demonstrates a client-server relationship using basic IP sockets. Once instantiated the server application is capable of connecting to multiple clients. The server consists of seperate chatrooms which clients connect to. Clients can only connect to one chatroom at a time and any messages sent within a chatroom can only be seen by other clients in the same chatroom. This program handles client disconnects and allows those clients to reconnect. The program runs indefinitely until a fatal error occurs or the user terminates the program.
+<h2>How to use</h2>
+<h3>Server.c</h3>
+<h4>Code</h4>
+Server.c consists of multiple constants that can be changed by the user before the program is executed.
+<ul>
+<li>SERVER_PORT #### - This is the port number. This value must be the same value in Client.c. Default value is 6341.</li>
+<li>MAX_PENDING # - This is the number of clients than can be pending for the socket accept(). Default value is 5.</li>
+<li>MAX_CHATROOMS # - This is the number of available chatrooms that are running within the server. Default value is 5.</li>
+<li>MAX_PER_CHATROOM # - This is maximum number of users allowed in each chatroom. Default value is 5.</li>
+<li>MAXNAME ### - This is the value in bytes of the allowed size for structure components within a data packet. This value must be the same value in Client.c. Default value is 256.</li>
+<li>CHATROOM_REFRESH_TIME # - This is the number of seconds that a chatroom will pause before checking the packet buffer and distributing the pending packets. Once distributed the packet is removed from the buffer. Default value is 2.</li>
+<li>PACKET_BUFFER_SIZE # - This is the number of packets that are allowed to be buffered, or pending, for each chatroom. Each buffer is emptied each time a chatroom refreshes. Default value is 5.</li>
+ </ul>
+<h4>Executing</h4>
+./Server<br>
+(No parameters are needed to execute Server.c.)<br>
+After execution Server.c will run indefinitely until a fatal error occurs or the user terminates the program.
+<h3>Client.c</h3>
+<h4>Code</h4>
+Client.c consists of only two constants that can be changed.
+<ul>
+<li>SERVER_PORT #### - This is the port number. This value must be the same value in Server.c. Default value is 6341.</li>
+<li>MAXNAME ### - This is the value in bytes of the allowed size for structure components within a data packet. This value must be the same value in Server.c. Default value is 256.</li>
+ </ul>
+ <h4>Executing</h4>
+ ./Client [IP_ADDRESS] [USERNAME] [CHATROOM_ID]<br>
+ <ul>
+ <li>[IP_ADDRESS] - IP address for Server.c. Example: 127.0.0.1</li>
+ <li>[USERNAME] - This is the username that will be used to identify the user within the chatroom. Example: John</li>
+ <li>[CHATROOM_ID] - This is the ID of the chatroom which is an integer. Chatroom ID's start at 0 and increment by one. If 5 chatrooms are allowed in Server.c then the available chatroom IDs would be 0,1,2,3 and 4. Example: 1</li>
+</ul>
+<h2>How it works</h2>
+Once executed the Server.c program begins going through the main function. The main function creates a seperate thread for each chatroom and runs the multicaster function in each one of the threads. A socket is created and set to listen to connecting clients. Once a client requests connection the socket accepts the connection and waits for a registration packet (1/3) from the client. The client sends the registration packet (1/3) to the server. Upon receipt of this registration packet (1/3) the Server creates a new thread to execute the join_handler function. The client information is then sent to the join_handler function and awaits for registration packet (2/3) and registration packet (3/3) from the client which the client sends. Upon receipt of the final registration apcket (3/3) a check is done to ensure......
+ 
+  
+ 
+ 
+ 
