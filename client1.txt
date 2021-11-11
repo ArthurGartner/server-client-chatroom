@@ -1,0 +1,26 @@
+Script started on 2021-11-10 21:42:08-05:00 [TERM="xterm-256color" TTY="/dev/pts/1" COLUMNS="80" LINES="24"]
+(base) ]0;arthur@AAG-XPS13: ~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[01;32marthur@AAG-XPS13[00m:[01;34m~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[00m$ ./ Client 127.0.0.1 Arthur 1
+[CLIENT] Attempting connection to server 127.0.0.1:6341...
+[CLIENT] Connection to server 127.0.0.1:6341 successful.
+[CLIENT] Sending 1st registration packet with type 121...
+[CLIENT] Registration packet (1/3) sent.
+[CLIENT] Registration packet (2/3) sent.
+[CLIENT] Registration packet (3/3) sent.
+[CLIENT] Awaiting response from server...
+[CLIENT] Packet received from server with type 221.
+[CHATROOM1][NOTIFICATION] You have joined chatroom 1. There are 0 other users in this chatroom.
+[CHATROOM1][NOTIFICATION]: Arthur has joined the chatroom.
+hello?
+[CHATROOM1][Arthur]: hello?
+[CHATROOM1][NOTIFICATION]: Jigs has joined the chatroom.
+[CHATROOM1][Jigs]: Hi!
+Hey Jigs!
+[CHATROOM1][Arthur]: Hey Jigs!
+[CHATROOM1][Jigs]: Computer Science is awesome!!
+I need to go. Talk to you later!! Goodby! e!
+[CHATROOM1][Arthur]: I need to go. Talk to you later!! Goodbye!
+^C
+(base) ]0;arthur@AAG-XPS13: ~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[01;32marthur@AAG-XPS13[00m:[01;34m~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[00m$ ex it
+exit
+
+Script done on 2021-11-10 21:44:15-05:00 [COMMAND_EXIT_CODE="130"]

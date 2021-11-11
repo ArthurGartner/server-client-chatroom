@@ -1,0 +1,42 @@
+Script started on 2021-11-10 21:40:55-05:00 [TERM="xterm-256color" TTY="/dev/pts/2" COLUMNS="80" LINES="24"]
+(base) ]0;arthur@AAG-XPS13: ~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[01;32marthur@AAG-XPS13[00m:[01;34m~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[00m$ ./ Client 127.0.0.1 Jigs 2
+[CLIENT] Attempting connection to server 127.0.0.1:6341...
+[CLIENT] Connection to server 127.0.0.1:6341 successful.
+[CLIENT] Sending 1st registration packet with type 121...
+[CLIENT] Registration packet (1/3) sent.
+[CLIENT] Registration packet (2/3) sent.
+[CLIENT] Registration packet (3/3) sent.
+[CLIENT] Awaiting response from server...
+[CLIENT] Packet received from server with type 221.
+[CHATROOM2][NOTIFICATION] You have joined chatroom 2. There are 0 other users in this chatroom.
+[CHATROOM2][NOTIFICATION]: Jigs has joined the chatroom.
+Any one there?
+[CHATROOM2][Jigs]: Any one there?
+O Oh    Oh this is the wrong chatroom
+[CHATROOM2][Jigs]: Oh this is the wrong chatroom
+^C
+(base) ]0;arthur@AAG-XPS13: ~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[01;32marthur@AAG-XPS13[00m:[01;34m~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[00m$ ./Client 127.0.0.1 Jigs 2[K1
+[CLIENT] Attempting connection to server 127.0.0.1:6341...
+[CLIENT] Connection to server 127.0.0.1:6341 successful.
+[CLIENT] Sending 1st registration packet with type 121...
+[CLIENT] Registration packet (1/3) sent.
+[CLIENT] Registration packet (2/3) sent.
+[CLIENT] Registration packet (3/3) sent.
+[CLIENT] Awaiting response from server...
+[CLIENT] Packet received from server with type 221.
+[CHATROOM1][NOTIFICATION] You have joined chatroom 1. There is 1 other user in this chatroom.
+[CHATROOM1][NOTIFICATION]: Jigs has joined the chatroom.
+Hi!
+[CHATROOM1][Jigs]: Hi!
+[CHATROOM1][Arthur]: Hey Jigs!
+Computer Science is awesome!!
+[CHATROOM1][Jigs]: Computer Science is awesome!!
+[CHATROOM1][Arthur]: I need to go. Talk to you later!! Goodbye!
+[CHATROOM1][NOTIFICATION]: Arthur has left the chatroom.
+I will log off now
+[CHATROOM1][Jigs]: I will log off now
+^C
+(base) ]0;arthur@AAG-XPS13: ~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[01;32marthur@AAG-XPS13[00m:[01;34m~/Desktop/CSCI632_Projects/Project3/CSCI632_Project3[00m$ ex it
+exit
+
+Script done on 2021-11-10 21:44:18-05:00 [COMMAND_EXIT_CODE="130"]
